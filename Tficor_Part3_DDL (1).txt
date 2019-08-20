@@ -1,0 +1,345 @@
+set echo on;
+set serveroutput on;
+set linesize 150;
+
+-- Drop Indexes
+DROP INDEX FK_Item_ID;
+DROP INDEX Order_User_ID;
+DROP INDEX VENDOR_REP;
+DROP INDEX FK_Vendor_ID;
+DROP INDEX SAP;
+DROP INDEX User_ID;
+DROP INDEX FK_DEPARTMENT;
+DROP INDEX FK_HOSPITAL_ID;
+DROP INDEX EMPLOYEE;
+DROP INDEX STATUS;
+DROP INDEX FK_Order_Num;
+
+--Drop Triggers
+DROP TRIGGER Order_request;
+DROP TRIGGER Order_before; 
+
+-- Drop Sequences
+DROP SEQUENCE Item_ID_Seq;
+DROP SEQUENCE Employee_ID_Seq;
+DROP SEQUENCE Order_Num_Seq;
+
+-- Drop Tables
+DROP TABLE Employee CASCADE CONSTRAINTS;
+DROP TABLE Hospital CASCADE CONSTRAINTS;
+DROP TABLE Orders CASCADE CONSTRAINTS;
+DROP TABLE Item  CASCADE CONSTRAINTS;
+DROP TABLE Representative  CASCADE CONSTRAINTS;
+DROP TABLE Vendor CASCADE CONSTRAINTS;
+DROP TABLE Purchasing CASCADE CONSTRAINTS;
+
+/*Create Tables
+Tables to be created: Hospital, Employee, Item, Order, 
+Vendor, Purchasing, & Represenative. */
+
+
+CREATE TABLE Hospital
+( 
+  Hospital_ID VARCHAR(6), 
+  Hospital_Name	VARCHAR(45),
+  Hospital_Address VARCHAR(100), 
+  Hospital_Phone NUMERIC(12), 
+  Hospital_Billing NUMERIC(12), 
+  Department VARCHAR(25), 
+  constraint PK_Hospital_ID primary key (Hospital_ID));
+
+-- Create sequence for employee_id in EMPLOYEE
+CREATE SEQUENCE Employee_ID_Seq
+START WITH 15200
+INCREMENT BY 1;
+
+CREATE TABLE Employee
+( Employee_ID           VARCHAR(10),
+  Employee_LastName     VARCHAR(25),
+  Employee_FirstName    VARCHAR(25),
+  Employee_Home_Address VARCHAR(100),
+  Employee_Extension    NUMERIC(4),
+  Employee_Email        VARCHAR(125),
+  Section_ID            VARCHAR(8),
+  User_ID               VARCHAR(6),
+  Hospital_ID           VARCHAR(6),
+  Department            VARCHAR(25),
+  constraint PK_Employee_ID primary key (Employee_ID)
+);
+
+CREATE TABLE Vendor
+(
+  Vendor_ID              NUMERIC(6),
+  Vendor_Name            VARCHAR(100),
+  Account_Representative NUMERIC(10), 
+  Category_ID            VARCHAR(45),
+  Vendor_Phone           NUMERIC(12),
+  Vendor_Address         VARCHAR(125),
+  Vendor_Country         VARCHAR(50),
+  constraint PK_Vendor_ID primary key (Vendor_ID));
+
+CREATE TABLE Representative
+(
+  Rep_ID    NUMERIC(10),
+  FirstName VARCHAR(25),
+  LastName  VARCHAR(50),
+  Email     VARCHAR(100),
+  Phone     NUMERIC(12),
+  Address   VARCHAR(125),
+  Vendor_ID NUMERIC(6),
+  constraint PK_Rep_ID primary key (Rep_ID),
+  constraint FK_Vendor_ID foreign key (Vendor_ID) references Vendor);
+
+CREATE SEQUENCE Item_ID_Seq
+START WITH 1
+INCREMENT BY 1;
+
+CREATE TABLE Item
+(
+  Item_ID VARCHAR(1000),
+  Manufacturer VARCHAR(30),
+  Catalog_Num VARCHAR(45),
+  Vendor_Catalog_Num VARCHAR(45),
+  Price NUMERIC(38),
+  SAP NUMERIC(6),
+  Vendor_ID NUMERIC(6),
+  Expiration DATE,
+  constraint PK_Item_ID primary key (Item_ID),
+  constraint FK_Vendor_Num foreign key (Vendor_ID) references Vendor
+);
+
+-- Create Sequence for Order_ID in Orders
+
+CREATE SEQUENCE Order_Num_Seq
+START WITH 1000
+INCREMENT BY 1; 
+
+CREATE TABLE Orders
+( Order_Num VARCHAR(10),
+  Submit_Date VARCHAR(10),
+  Status VARCHAR(20),
+  Cost_Center NUMERIC(8),
+  Quantity VARCHAR(20),
+  Item_ID VARCHAR(45),
+  User_ID VARCHAR(6),
+  Section_ID VARCHAR(8),
+  Catalog_Num VARCHAR(45),
+  constraint PK_Order_Num primary key (Order_Num),
+  constraint FK_Item_ID foreign key (Item_ID) references Item
+);
+
+CREATE TABLE Purchasing
+( 
+  Req_Num VARCHAR(20),
+  Purchase_Order_Num NUMERIC(25),
+  Delivery_Date VARCHAR(10),
+  Purchasing_Acct NUMERIC(8),
+  Processing_Date VARCHAR(10),
+  Order_Num VARCHAR(10),
+  Vendor_ID NUMERIC(6),
+  User_ID VARCHAR(6),
+  SAP NUMERIC(6),
+  constraint PK_Req_Num primary key (Req_Num),
+  constraint FK_Vendor_ID_2 foreign key (Vendor_ID) references Vendor,
+  constraint FK_Order_Num foreign key (Order_Num) references Orders
+);
+
+/*Create Indexes*/
+
+CREATE INDEX FK_Order_Num
+ON Purchasing (Order_Num);
+
+CREATE INDEX FK_Item_ID 
+ON Orders (Item_ID);
+
+CREATE INDEX Order_User_ID
+ON Orders(User_ID);
+
+CREATE INDEX Vendor_Rep
+ON Vendor(Account_Representative);
+
+CREATE INDEX FK_Vendor_ID
+ON Item (Vendor_ID);
+
+CREATE INDEX FK_Department
+ON Employee (Department);
+
+CREATE INDEX FK_Hospital_ID
+ON Employee(Hospital_ID);
+
+CREATE INDEX SAP
+ON Purchasing(SAP);
+
+CREATE INDEX EMPLOYEE
+ON EMPLOYEE(Employee_LastName, Employee_FirstName);
+
+CREATE INDEX User_ID
+ON Purchasing(User_ID);
+
+CREATE INDEX STATUS
+ON Orders (Status);
+
+/* Create Views 
+1) Create a view to see orders placed by a user.
+2) Create a view to see orders placed Today
+*/
+
+CREATE OR REPLACE VIEW Orders_Placed_By AS
+SELECT Orders.Order_Num, Orders.Submit_Date, Orders.User_ID, Item.item_ID, Item.Price
+FROM Orders INNER JOIN Item
+ON Orders.Item_ID = Item.Item_ID;
+
+/*Create a view that indicates relevant information regarding 
+Orders placed the date being viewed */
+
+CREATE OR REPLACE VIEW Orders_Placed_Today AS
+SELECT ORDERS.ORDER_NUM, ORDERS.SUBMIT_DATE, ORDERS.ITEM_ID, Orders.Quantity, Orders.Status, Item.Catalog_Num, Item.Price 
+FROM Orders
+LEFT JOIN Item
+ON Orders.Item_ID = Item.Item_ID
+WHERE Orders.Submit_DATE = SYSDATE
+ORDER BY Orders.Order_num;
+
+CREATE OR REPLACE VIEW Orders_Placed AS
+SELECT ORDERS.ORDER_NUM, ORDERS.SUBMIT_DATE, ORDERS.ITEM_ID, Orders.Quantity, Orders.Status, Item.Catalog_Num, Item.Price 
+FROM Orders
+LEFT JOIN Item
+ON Orders.Item_ID = Item.Item_ID
+ORDER BY Orders.Order_num;
+
+/*Triggers*/
+
+--Trigger to output Text indicating item request has been placed. 
+CREATE OR REPLACE TRIGGER Order_request
+AFTER INSERT ON Orders
+FOR EACH ROW
+BEGIN
+  dbms_output.put_line('Item requested has been placed.');
+END;
+/
+
+--Trigger to find the user performing the inser into table. 
+
+CREATE OR REPLACE TRIGGER Order_before
+BEFORE INSERT
+  ON Orders
+  FOR EACH ROW
+DECLARE
+  User_ID VARCHAR(6);
+BEGIN
+-- Find username of person performing INSERT into table
+SELECT USER_ID INTO USER_ID
+FROM dual;
+
+-- Update Submit_Date field to current system date
+  :new.submit_date := SYSDATE;
+END;
+/
+
+commit;
+
+
+/* INSERT DATA */
+
+-- EMPLOYEE INSERT
+INSERT INTO Employee (Employee_ID, Employee_LastName, Employee_Firstname, User_ID, Employee_Home_Address, Section_ID, Employee_Extension, Hospital_ID, Department, Employee_Email)
+VALUES (Employee_ID_Seq.NEXTVAL, 'Ficor', 'Tracy', 'tficor', NULL, 'GC100', 5393, 'SSMCG', 'Cytogenetics', NULL);
+
+INSERT INTO Employee (Employee_ID, Employee_LastName, Employee_Firstname, User_ID, Employee_Home_Address, Section_ID, Employee_Extension, Hospital_ID, Department, Employee_Email)
+VALUES (Employee_ID_Seq.NEXTVAL, 'Stanford', 'Jill', 'Jstanf', NULL, 'GC101', 5393, 'SSMCG', 'Cytogenetics', NULL);
+
+INSERT INTO Employee (Employee_ID, Employee_LastName, Employee_Firstname, User_ID, Employee_Home_Address, Section_ID, Employee_Extension, Hospital_ID, Department, Employee_Email)
+VALUES (Employee_ID_Seq.NEXTVAL, 'Candor', 'Kelcey', 'kcando', NULL, 'GC102', 5334,'SSMCG', 'Cytogenetics', NULL);
+
+INSERT INTO Employee (Employee_ID, Employee_LastName, Employee_Firstname, User_ID, Employee_Home_Address, Section_ID, Employee_Extension, Hospital_ID, Department, Employee_Email)
+VALUES (Employee_ID_Seq.NEXTVAL, 'Darcy', 'Lucy', 'ldarcy', NULL, 'GC100', 5445, 'SSMCG', 'Cytogenetics', NULL);
+
+INSERT INTO Employee (Employee_ID, Employee_LastName, Employee_Firstname, User_ID, Employee_Home_Address, Section_ID, Employee_Extension, Hospital_ID, Department, Employee_Email)
+VALUES (Employee_ID_Seq.NEXTVAL, 'Dolan', 'Benjamin', 'bdolan', NULL, 'GC101', 5441, 'SSMCG', 'Cytogenetics', NULL);
+
+INSERT INTO Employee (Employee_ID, Employee_LastName, Employee_Firstname, User_ID, Employee_Home_Address, Section_ID, Employee_Extension, Hospital_ID, Department, Employee_Email)
+VALUES (Employee_ID_Seq.NEXTVAL, 'ODonnell', 'Rachel', 'rodonn', NULL, 'GC104', 5393, 'SSMCG', 'Cytogenetics', NULL);
+
+INSERT INTO Employee (Employee_ID, Employee_LastName, Employee_Firstname, User_ID, Employee_Home_Address, Section_ID, Employee_Extension, Hospital_ID, Department, Employee_Email)
+VALUES (Employee_ID_Seq.NEXTVAL, 'Michaels', 'Chris', 'cmicha', NULL, 'GC105', 5344, 'SSMCG', 'Cytogenetics', NULL);
+
+-- HOSPITAL INSERT
+
+INSERT INTO Hospital (Hospital_ID, Hospital_name, Hospital_Address, Hospital_Phone, Hospital_Billing, Department)
+VALUES ('SSMCG', 'SSM HEALTH CARDINAL GLENNON', '1545 Healthy Lane', 3145555555, 3145555555, NULL);
+
+INSERT INTO Hospital (Hospital_ID, Hospital_name, Hospital_Address, Hospital_Phone, Hospital_Billing, Department)
+VALUES ('SSMSM', 'SSM HEALTH SAINT MARYS', '2154 Jamboree Ave.', 1544445444, 3144589555, NULL);
+
+-- VENDOR INSERT
+INSERT INTO Vendor(Vendor_ID, Vendor_Name, Account_Representative, Category_ID, Vendor_Phone, Vendor_Address, Vendor_Country)
+VALUES (115421, 'ABBOTT MOLECULAR', NULL, 'Probes/Reagent', NULL, NULL, 'USA');
+
+INSERT INTO Vendor(Vendor_ID, Vendor_Name, Account_Representative, Category_ID, Vendor_Phone, Vendor_Address, Vendor_Country)
+VALUES (102345, 'AGILENT', NULL, 'Probes/Reagent', NULL, NULL, 'USA');
+
+INSERT INTO Vendor(Vendor_ID, Vendor_Name, Account_Representative, Category_ID, Vendor_Phone, Vendor_Address, Vendor_Country)
+VALUES (159876, 'CORNING ', NULL, 'Consumables', NULL, NULL, 'USA');
+
+-- ITEM INSERT
+INSERT INTO Item (Item_ID, Manufacturer, Catalog_Num, Vendor_Catalog_Num, Price, SAP, Vendor_ID, Expiration)
+VALUES (Item_ID_Seq.NEXTVAL, 'ABBOTT MOLECULAR', '30-456351', '30-456351', '1173.28', 256986, 115421, NULL);
+
+INSERT INTO Item (Item_ID, Manufacturer, Catalog_Num, Vendor_Catalog_Num, Price, SAP, Vendor_ID, Expiration)
+VALUES (Item_ID_Seq.NEXTVAL, 'AGILENT', '30-456351', 'Q45623', '256.82', 235124, 102345, NULL);
+
+INSERT INTO Item (Item_ID, Manufacturer, Catalog_Num, Vendor_Catalog_Num, Price, SAP, Vendor_ID, Expiration)
+VALUES (Item_ID_Seq.NEXTVAL, 'CORNING', '3545-52', '3545-52', '45.43', 245316, 159876, NULL);
+
+--ORDERS INSERT
+INSERT INTO Orders (Order_Num, Submit_Date, Status, Cost_Center, Quantity, User_ID, Section_ID, Item_ID, Catalog_Num)
+VALUES (Order_Num_Seq.NEXTVAL, '2-4-2019', 'Delivered', 34100010, 2, 'tficor', NULL, NULL,'30-456351');
+
+INSERT INTO Orders (Order_Num, Submit_Date, Status, Cost_Center, Quantity, User_ID, Section_ID, Item_ID, Catalog_Num)
+VALUES (Order_Num_Seq.NEXTVAL, '4/6/2019', 'In progress', 34100010, 2, 'cmicha', NULL, NULL, '52-44425');
+
+INSERT INTO Orders (Order_Num, Submit_Date, Status, Cost_Center, Quantity, User_ID, Section_ID, Item_ID, Catalog_Num)
+VALUES (Order_Num_Seq.NEXTVAL, '4/6/2019', 'Backorder', 34100010, 1,'ldarcy', NULL, NULL, '3545-52');
+
+INSERT INTO Orders (Order_Num, Submit_Date, Status, Cost_Center, Quantity, User_ID, Section_ID, Item_ID, Catalog_Num)
+VALUES (Order_Num_Seq.NEXTVAL, '3-5-2019', 'Backorder', 34100010, 2, 'tficor', NULL, NULL,'52-44425');
+
+INSERT INTO Orders (Order_Num, Submit_Date, Status, Cost_Center, Quantity, User_ID, Section_ID, Item_ID, Catalog_Num)
+VALUES (Order_Num_Seq.NEXTVAL, '4/12/2019', 'Delivered', 34100010, 2, 'cmicha', NULL, NULL, '30-456351');
+
+INSERT INTO Orders (Order_Num, Submit_Date, Status, Cost_Center, Quantity, User_ID, Section_ID, Item_ID, Catalog_Num)
+VALUES (Order_Num_Seq.NEXTVAL, '4/19/2019', 'In progress', 34100010, 1,'ldarcy', NULL, NULL, '52-44425');
+
+--PURCHASING INSERT
+INSERT INTO Purchasing (Req_Num, Purchase_Order_Num, Delivery_Date, User_ID, Purchasing_Acct, SAP, Order_Num, Vendor_ID, Processing_Date)
+VALUES (1455541, NULL, NULL, 'tficor', 6400084, 245316, NULL, 115421, '4/2/2019');
+
+INSERT INTO Purchasing (Req_Num, Purchase_Order_Num, Delivery_Date, User_ID, Purchasing_Acct, SAP, Order_Num, Vendor_ID, Processing_Date)
+VALUES (1455542, NULL, NULL, 'tficor', 6400084, 245316, NULL, 102345, '4/6/2019');
+
+INSERT INTO Purchasing (Req_Num, Purchase_Order_Num, Delivery_Date, User_ID, Purchasing_Acct, SAP, Order_Num, Vendor_ID, Processing_Date)
+VALUES (1455543, NULL, NULL, 'tficor', 6400085, 245316, NULL, 159876, '4/6/2019');
+-- REPRESENTATIVE INSERT
+INSERT INTO Representative (Rep_ID, FirstName, LastName, Email, Phone, Address, Vendor_ID)
+VALUES (405, 'Jerry', 'Bennett', 'Jbennett@abbott.com', 555555555, NULL, 115421);
+
+INSERT INTO Representative (Rep_ID, FirstName, LastName, Email, Phone, Address, Vendor_ID)
+VALUES (407, 'Adam', 'Marshall', 'adam.marshall@corning.com', 556555555, NULL, 159876);
+
+INSERT INTO Representative (Rep_ID, FirstName, LastName, Email, Phone, Address, Vendor_ID)
+VALUES (400, 'Madison', 'Collette', 'm.collette@agilent.com', 557555555, NULL, 102345);
+
+commit;
+
+-- Evaluate Views 
+SELECT * FROM Orders_Placed_By;
+SELECT * FROM ORDERS_PLACED_TODAY;
+
+
+SELECT * FROM Hospital;
+SELECT * FROM Orders;
+SELECT * FROM Item;
+SELECT * FROM Employee;
+SELECT * FROM Vendor;
+SELECT * FROM Purchasing;
+SELECT * FROM Representative;
